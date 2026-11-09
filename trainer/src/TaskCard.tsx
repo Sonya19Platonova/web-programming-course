@@ -4,10 +4,11 @@ type TaskCardProps = {
   task: Task;
   answer: Answer | undefined;
   onAnswerChange: (ans: Answer) => void;
+  onClear: () => void;
   disabled: boolean;
 };
 
-export function TaskCard({ task, answer, onAnswerChange, disabled }: TaskCardProps) {
+export function TaskCard({ task, answer, onAnswerChange, onClear, disabled }: TaskCardProps) {
   return (
     <article className="task-card">
       <h3>{task.id}</h3>
@@ -18,7 +19,6 @@ export function TaskCard({ task, answer, onAnswerChange, disabled }: TaskCardPro
         <pre>{task.code}</pre>
       )}
 
-      {/* Задание с выбором ответа */}
       {task.kind === "single-choice" && (
         <div className="options-list">
           {task.options.map((option: Option) => {
@@ -51,7 +51,6 @@ export function TaskCard({ task, answer, onAnswerChange, disabled }: TaskCardPro
         </div>
       )}
 
-      {/* Текстовое задание */}
       {task.kind === "short-text" && (
         <div className="text-answer">
           <textarea
@@ -68,6 +67,13 @@ export function TaskCard({ task, answer, onAnswerChange, disabled }: TaskCardPro
             rows={4}
           />
         </div>
+      )}
+
+      {/* Кнопка очистки ответа */}
+      {answer && !disabled && (
+        <button onClick={onClear} className="btn-clear">
+          Очистить ответ
+        </button>
       )}
     </article>
   );

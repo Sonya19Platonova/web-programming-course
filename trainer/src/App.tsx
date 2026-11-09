@@ -1,7 +1,9 @@
-﻿import { useState } from "react";
+﻿import { useState, useReducer } from "react";
 import type { TrainingSet, Task, Answer } from "./domain";
+import { getProgress } from "./domain";
 import { TaskList } from "./TaskList";
 import { TaskCard } from "./TaskCard";
+import { attemptReducer } from "./attempt";
 
 // Данные
 const task1: Task = {
@@ -32,69 +34,48 @@ const trainingSet: TrainingSet = {
 
 export default function App() {
   const [selectedId, setSelectedId] = useState("ts-1");
-  const [answers, setAnswers] = useState<Answer[]>([]);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  // useReducer для ответов и статуса
+  const [attempt, dispatch] = useReducer(attemptReducer, {
+    answers: [],
+    isSubmitted: false,
+  });
 
-  // Сохранение ответа 
-  function saveAnswer(newAnswer: Answer) {
-    const newAnswersList: Answer[] = [];
-    for (const a of answers) {
-      if (a.taskId !== newAnswer.taskId) {
-        newAnswersList.push(a);
-      }
-    }
-    newAnswersList.push(newAnswer);
-    setAnswers(newAnswersList);
-  }
+  // Локальное состояние для открытия обзора до завершения
+  const [isReviewMode, setIsReviewMode] = useState(false);
 
-  // Подсчёт прогресса 
-  let filledCount = 0;
+  // Подсчёт прогресса через функцию из domain.ts
+  const progress = getProgress(trainingSet, attempt.answers);
+  const filledCount = progress.filled;
+
+  // Список пропущенных
   const missedTasks: string[] = [];
-
   for (const task of trainingSet.tasks) {
-    let answer: Answer | undefined = undefined;
-    for (const a of answers) {
-      if (a.taskId === task.id) {
-        answer = a;
-        break;
-      }
-    }
-
     let isFilled = false;
-    if (answer) {
-      if (answer.kind === "single-choice") {
-        isFilled = true;
-      } else if (answer.kind === "short-text" && answer.text.trim().length > 0) {
-        isFilled = true;
+    for (const a of attempt.answers) {
+      if (a.taskId === task.id) {
+        if (a.kind === "single-choice") isFilled = true;
+        else if (a.kind === "short-text" && a.text.trim().length > 0) isFilled = true;
       }
     }
-
-    if (isFilled) {
-      filledCount++;
-    } else {
-      missedTasks.push(task.id);
-    }
+    if (!isFilled) missedTasks.push(task.id);
   }
 
-  // Экран завершения
   function handleFinish() {
     if (missedTasks.length > 0) {
       const warning = "Вы не ответили на: " + missedTasks.join(", ") + ". Завершить?";
-      if (!window.confirm(warning)) {
-        return;
-      }
+      if (!window.confirm(warning)) return;
     }
-    setIsSubmitted(true);
+    dispatch({ type: "submit" });
+    setIsReviewMode(true); // Финальный экран
   }
 
-  // Новая попытка
   function handleRestart() {
-    setAnswers([]);
-    setIsSubmitted(false);
+    dispatch({ type: "restart" });
     setSelectedId("ts-1");
+    setIsReviewMode(false);
   }
 
-  // Текст ответа
   function getReviewText(task: Task, answersList: Answer[]): string {
     let answer: Answer | undefined = undefined;
     for (const a of answersList) {
@@ -103,39 +84,39 @@ export default function App() {
         break;
       }
     }
-
     if (!answer) return "Нет ответа";
 
     if (answer.kind === "single-choice" && task.kind === "single-choice") {
       for (const opt of task.options) {
-        if (opt.id === answer.optionId) {
-          return opt.label;
-        }
+        if (opt.id === answer.optionId) return opt.label;
       }
       return answer.optionId;
     }
-
     if (answer.kind === "short-text") {
-      if (answer.text.trim().length > 0) {
-        return answer.text;
-      } else {
-        return "Пустой текст";
-      }
+      return answer.text.trim().length > 0 ? answer.text : "Пустой текст";
     }
-
     return "Нет ответа";
   }
 
-  // Экран прохождения
-  if (isSubmitted) {
+  // Экран обзора (до завершения или после)
+  if (isReviewMode || attempt.isSubmitted) {
     const reviewItems = [];
     for (const task of trainingSet.tasks) {
-      const text = getReviewText(task, answers);
+      const text = getReviewText(task, attempt.answers);
       reviewItems.push(
         <div key={task.id} className="review-card">
-          <p><strong>{task.id}</strong></p>
-          <p>{task.prompt}</p>
+          <p><strong>{task.id}</strong>: {task.prompt}</p>
           <p><em>Ваш ответ: {text}</em></p>
+          
+          {/* Кнопка очистки в обзоре (до завершения) */}
+          {!attempt.isSubmitted && (
+            <button 
+              onClick={() => dispatch({ type: "clear", taskId: task.id })}
+              className="btn-clear"
+            >
+              Удалить ответ
+            </button>
+          )}
         </div>
       );
     }
@@ -143,35 +124,38 @@ export default function App() {
     return (
       <main>
         <h1>{trainingSet.title}</h1>
-        <h2>Попытка завершена</h2>
+        <h2>{attempt.isSubmitted ? "Попытка завершена" : "Предварительный обзор"}</h2>
         <p>Вы ответили на {filledCount} из {trainingSet.tasks.length}.</p>
 
-        <div className="review-list">
-          {reviewItems}
-        </div>
+        <div className="review-list">{reviewItems}</div>
 
-        <button onClick={handleRestart} className="btn-finish">
-          Начать новую попытку
-        </button>
+        {!attempt.isSubmitted ? (
+          <div style={{ marginTop: "20px" }}>
+            <button onClick={() => setIsReviewMode(false)} className="btn-finish" style={{ marginRight: "10px", background: "gray" }}>
+              Вернуться к заданиям
+            </button>
+            <button onClick={handleFinish} className="btn-finish">
+              Завершить попытку
+            </button>
+          </div>
+        ) : (
+          <button onClick={handleRestart} className="btn-finish">
+            Начать новую попытку
+          </button>
+        )}
       </main>
     );
   }
 
-  // Экран выполнения
+  // Экран прохождения
   let selectedTask: Task | undefined = undefined;
   for (const t of trainingSet.tasks) {
-    if (t.id === selectedId) {
-      selectedTask = t;
-      break;
-    }
+    if (t.id === selectedId) { selectedTask = t; break; }
   }
 
   let currentAnswer: Answer | undefined = undefined;
-  for (const a of answers) {
-    if (a.taskId === selectedId) {
-      currentAnswer = a;
-      break;
-    }
+  for (const a of attempt.answers) {
+    if (a.taskId === selectedId) { currentAnswer = a; break; }
   }
 
   return (
@@ -180,9 +164,7 @@ export default function App() {
       <p>Прогресс: {filledCount} из {trainingSet.tasks.length}</p>
       
       {missedTasks.length > 0 && (
-        <p className="missed-warning">
-          Без ответа: {missedTasks.join(", ")}
-        </p>
+        <p className="missed-warning">Без ответа: {missedTasks.join(", ")}</p>
       )}
 
       <div className="task-layout">
@@ -197,16 +179,22 @@ export default function App() {
             <TaskCard
               task={selectedTask}
               answer={currentAnswer}
-              onAnswerChange={saveAnswer}
+              onAnswerChange={(ans) => dispatch({ type: "save", answer: ans })}
+              onClear={() => dispatch({ type: "clear", taskId: selectedTask!.id })}
               disabled={false}
             />
           ) : (
             <p>Задание не найдено.</p>
           )}
           
-          <button onClick={handleFinish} className="btn-finish">
-            Завершить попытку
-          </button>
+          <div className="action-buttons">
+            <button onClick={() => setIsReviewMode(true)} className="btn-secondary">
+              Обзор ответов
+            </button>
+            <button onClick={handleFinish} className="btn-finish" style={{ marginTop: 0 }}>
+              Завершить попытку
+            </button>
+          </div>
         </div>
       </div>
     </main>

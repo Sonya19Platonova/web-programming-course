@@ -149,6 +149,48 @@ h1 {
   border-radius: 12px;
 }
 
+/* Контейнер для группировки кнопок внизу */
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* Вторичная кнопка (серая) */
+.btn-secondary {
+  padding: 12px 24px;
+  background: #6d665e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #504a44;
+}
+
+/* Кнопка очистки ответа (красная контурная) */
+.btn-clear {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: transparent;
+  color: #c0392b;
+  border: 1px solid #c0392b;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear:hover {
+  background: #c0392b;
+  color: white;
+}
+
 /* Адаптив */
 @media (min-width: 768px) {
   .task-layout {
